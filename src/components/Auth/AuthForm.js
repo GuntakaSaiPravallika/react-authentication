@@ -53,6 +53,7 @@ const AuthForm = () => {
       })
       .then((data) => {
         authCntx.login(data.idToken);
+        localStorage.setItem("token", data.idToken);
         history.replace('/');
       })
       .catch((error) => {
