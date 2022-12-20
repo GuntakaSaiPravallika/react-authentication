@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+
+let logoutTimer;
 
 const AuthContext = React.createContext({
   token: "",
@@ -7,18 +9,58 @@ const AuthContext = React.createContext({
   logout: () => {},
 });
 
-export const AuthContextProvider = (props) => {
-  const localStorageToken = localStorage.getItem('token');
-  const [token, setToken] = useState(localStorageToken);
+const calculateRemainingTime = (expirationTime) =>{
+  const currentTime = new Date().getTime();
+  const  expireTime  =  new Date(expirationTime).getTime();
+  return expireTime-currentTime;
+}
 
-  const loginHandler = (token) => {
+const retrieveStoredToken = () => {
+  const  storedToken  =  localStorage.getItem('token');
+  const  storedExpirationDate  =  localStorage.getItem('expirationTime');
+
+  const remainingTime = calculateRemainingTime(storedExpirationDate);
+
+  if (remainingTime <= 3600) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('expirationTime');
+    return null;
+  }
+
+  return {
+    token: storedToken,
+    duration: remainingTime,
+  };
+};
+
+export const AuthContextProvider = (props) => {
+  const tokenData= retrieveStoredToken();
+  let initialToken;
+  if (tokenData) {
+    initialToken  =  tokenData.token;
+  }
+  const [token, setToken] = useState(initialToken);
+
+  const loginHandler = (token, expirationTime) => {
     setToken(token);
+    
+    const remainingTime = calculateRemainingTime(expirationTime);
+    logoutTimer = setTimeout(logoutHandler, remainingTime);
   };
 
-  const logoutHandler = () => {
+  const logoutHandler = useCallback(() => {
     setToken(null);
     localStorage.removeItem('token');
-  };
+    if (logoutTimer) {
+      clearTimeout(logoutTimer);
+    }
+  },[]);
+
+  useEffect(() => {
+    if (tokenData) {
+      logoutTimer = setTimeout(logoutHandler, tokenData.duration);
+    }
+  }, [tokenData, logoutHandler]);
 
   const authContextValue = {
     token: token,
